@@ -1,12 +1,13 @@
 """Author: Bansri Patel
    Created: 4/10/2021
-   Updated: 4/19/2021
+   Updated: 4/27/2021
 
    Purpose:
    create a data repository of courses, majors, students, and instructors
 """
 
 import os
+import sqlite3
 from HW08_Bansrikumari_Patel import file_reader
 from typing import List, Iterator, Tuple, DefaultDict, Set, Dict
 from collections import defaultdict
@@ -129,9 +130,11 @@ class Repository:
        instructors
     """
 
-    def __init__(self, dir_path: str, tables: bool = True) -> None:
+    def __init__(self, dir_path: str, db_path: str, tables:
+                 bool = True) -> None:
         """init method to initialize the attributes"""
         self._dir_path: str = dir_path
+        self._db_path: str = db_path
         self._students_dict: Dict[str, Student] = dict()
         self._instructors_dict: Dict[str, Instructor] = dict()
         self._majors_dict: Dict[str, Major] = dict()
@@ -154,6 +157,8 @@ class Repository:
                 print(self.instructor_pt())
                 print("Majors Data")
                 print(self.majors_pt())
+                print("Student Grades Table")
+                print(self.student_grades_table_db())
 
     def _get_majors(self, path: str) -> None:
         """read majors data from file using file_reader into the container"""
@@ -171,7 +176,7 @@ class Repository:
         """read students data from file into the container"""
         try:
             students_data: Iterator(Tuple[str]) = file_reader(path, 3,
-                                                              sep=";",
+                                                              sep="\t",
                                                               header=True)
             for cwid, name, major in students_data:
                 if major not in self._majors_dict:
@@ -187,7 +192,7 @@ class Repository:
         """
         try:
             instructors_data: Iterator(Tuple[str]) = file_reader(path, 3,
-                                                                 sep="|",
+                                                                 sep="\t",
                                                                  header=True)
             for cwid, name, department in instructors_data:
                 self._instructors_dict[cwid] = Instructor(cwid, name,
@@ -199,7 +204,7 @@ class Repository:
         """read data of grades from grades file and update student and
            instructor data.
         """
-        grades: Iterator(Tuple[str]) = file_reader(path, 4, sep="|",
+        grades: Iterator(Tuple[str]) = file_reader(path, 4, sep="\t",
                                                    header=True)
         for st_cwid, course, grade, inst_cwid in grades:
             if st_cwid in self._students_dict:
@@ -210,6 +215,26 @@ class Repository:
                 self._instructors_dict[inst_cwid].update_students(course)
             else:
                 print(f"grade for unkown instructor {inst_cwid}")
+
+    def _student_grades_table_db_summary(self, db_path:
+                                         str) -> Iterator[Tuple[str, str, str,
+                                                                str, str]]:
+        """connect to database and fetch student, grades data from the database
+           using query
+        """
+        try:
+            db: sqlite3.Connection = sqlite3.connect(db_path)
+        except sqlite3.OperationalError as e:
+            raise sqlite3.OperationalError
+            print(e)
+        else:
+            query: str = """select s.name as Student, s.cwid, g.course,
+                            g.grade, i.name as Instructor from students s join
+                            grades g on s.cwid = g.StudentCWID join instructors
+                            i on g.InstructorCWID = i.cwid order by s.name"""
+
+            for name, cwid, course, grade, instructor in db.execute(query):
+                yield [name, cwid, course, grade, instructor]
 
     def student_pt(self) -> PrettyTable:
         """print pretty table for student"""
@@ -240,10 +265,22 @@ class Repository:
 
         return p_table
 
+    def student_grades_table_db(self) -> PrettyTable:
+        """print student_grades pretty table"""
+        p_table: PrettyTable = PrettyTable(field_names=["Name", "CWID",
+                                                        "Course", "Grade",
+                                                        "Instructor"])
+        for row in self._student_grades_table_db_summary(self._db_path):
+            p_table.add_row(row)
+
+        return p_table
+
 
 def main() -> None:
     """create object of Repository"""
-    rp: Repository = Repository("/Users/bansripatel/Desktop/ssw-810", True)
+    rp: Repository = Repository("/Users/bansripatel/Desktop/ssw-810",
+                                r"/Users/bansripatel/Desktop/ssw-810/"
+                                r"810_startup/810_startup.db", True)
 
 
 if __name__ == "__main__":
